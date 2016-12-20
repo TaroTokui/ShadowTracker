@@ -28,57 +28,44 @@ void ofApp::setup(){
 	bgCalcStartTime = ofGetElapsedTimeMillis();
 
 	// init fbo
-	fbo.allocate(depthWidth, depthHeight);
+	warpFbo.allocate(depthWidth, depthHeight);
+	shadowFbo.allocate(SHADOW_WIDTH, SHADOW_HEIGHT);
+
+	// init mapper
 	bezManager.setup(10); //WarpResolution
-	bezManager.addFbo(&fbo);
+	bezManager.addFbo(&warpFbo);
+	bezManager.toggleGuideVisible();
 
 	bezManager.loadSettings();
+
+	currentMode = MODE_DEPTH_SETTING;
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
 
-	// set background
-	if (bgCalcStartTime + bgAddDuration * 1000 > ofGetElapsedTimeMillis())
-	{
-		bSetBg.set(true);
-	}
-	else {
-		bSetBg.set(false);
-	}
+	update_kinect();
+	calc_front_image();
+	update_warp_fbo();
+	update_shadow_fbo();
 
-	if (bShowIrImage)
-	{
-		kinectV2.grabNewFrameIR();
-	}
-	else
-	{
-		kinectV2.grabNewFrame();
-	}
-	
-	// calc front image
-	if (kinectV2.newFrameIsAvailable())
-	{
-		imageProcessing.update(kinectV2.getDepthData16());
+	//Spout
+	spout.sendTexture(shadowFbo.getTexture(), "fromOF");
 
-		if (bSetBg)
-		{
-			imageProcessing.calcBackground();
-		}
-		else
-		{
-			imageProcessing.findActiveObject();
-		}
-	}
+	switch (currentMode)
+	{
+	case MODE_DEPTH_SETTING:
+		break;
 
-	// update fbo
-	fbo.begin();
-	ofBackground(0);
-	ofSetColor(255);
-	ofFill();
-	imageProcessing.show_debug_image(0, 0);
-	//ofDrawRectangle(0, 0, depthWidth, depthHeight);
-	fbo.end();
+	case MODE_WARP_SETTING:
+		break;
+
+	case MODE_IMAGE_PROCESSING:
+		break;
+
+	default:
+		break;
+	}
 
 }
 
@@ -94,56 +81,91 @@ void ofApp::draw(){
 	int window_x = offset_x;
 	int window_y = offset_y;
 
-	if (bShowIrImage)
+	// mode
+	string text = "mode: ";
+	switch (currentMode)
 	{
-		kinectV2.draw_IR_image(window_x, window_y);
-	}
-	else
-	{
-		// show raw depth image
-		imageProcessing.show_debug_image(window_x, window_y);
-	}
-	
+	case MODE_DEPTH_SETTING:
+		text += "depth setting";
 
-	drawInfo(window_x, window_y, "depth image");
-	drawOutline(window_x, window_y, depthWidth, depthHeight);
+		if (bShowIrImage)
+		{
+			kinectV2.draw_IR_image(window_x, window_y);
+		}
+		else
+		{
+			// show raw depth image
+			imageProcessing.show_debug_image(window_x, window_y);
+		}
 
-	if (bShowMask)
-	{
+
+		drawInfo(window_x, window_y, "depth image");
+		drawOutline(window_x, window_y, depthWidth, depthHeight);
+
+		if (bShowMask)
+		{
+			ofPushStyle();
+			ofSetColor(255, 128);
+			maskGenerator.draw_mask(window_x, window_y);
+			ofPopStyle();
+		}
+
+		// bg image
+		window_x = offset_x;
+		window_y = depthHeight + offset_y * 2;
+
+		imageProcessing.show_bg_image(window_x, window_y);
+
+		drawInfo(window_x, window_y, "background image");
+		drawInfo(window_x, window_y + 18, "b: reset background image");
+		drawOutline(window_x, window_y, depthWidth, depthHeight);
+
+		// front image
+		window_x = depthWidth + offset_x * 2;
+		window_y = offset_y;
+
+		imageProcessing.show_front_image(window_x, window_y);
+
+		drawInfo(window_x, window_y, "front image");
+		drawOutline(window_x, window_y, depthWidth, depthHeight);
+
+		// shadow image
+		window_x = depthWidth + offset_x * 2;
+		window_y = depthHeight + offset_y * 2;
+
+		shadowFbo.draw(window_x, window_y, SHADOW_WIDTH, SHADOW_HEIGHT);
+		drawInfo(window_x, window_y, "shadow image");
+		drawOutline(window_x, window_y, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+		break;
+
+	case MODE_WARP_SETTING:
+		text += "warp setting";
+
 		ofPushStyle();
-		ofSetColor(255, 128);
-		maskGenerator.draw_mask(window_x, window_y);
+		// draw bezier
+		ofSetColor(255, 255, 255, 255);
+		bezManager.draw();
+
+		window_x = depthWidth + offset_x * 2;
+		window_y = offset_y;
+		ofSetColor(255, 0, 0);
+		drawOutline((ofGetWindowWidth() - SHADOW_WIDTH) / 2,
+					(ofGetWindowHeight() - SHADOW_HEIGHT ) / 2,
+					SHADOW_WIDTH, SHADOW_HEIGHT);
 		ofPopStyle();
+		break;
+
+	case MODE_IMAGE_PROCESSING:
+		text += "image processing";
+		break;
+
+	default:
+		break;
 	}
 
-	// bg image
-	window_x = offset_x;
-	window_y = depthHeight + offset_y * 2;
-
-	imageProcessing.show_bg_image(window_x, window_y);
-
-	drawInfo(window_x, window_y, "background image");
-	drawInfo(window_x, window_y + 18, "b: reset background image");
-	drawOutline(window_x, window_y, depthWidth, depthHeight);
-
-	// front image
-	window_x = depthWidth + offset_x * 2;
-	window_y = depthHeight + offset_y * 2;
-
-	imageProcessing.show_front_image(window_x, window_y);
-
-	drawInfo(window_x, window_y, "background image");
-	drawInfo(window_x, window_y + 18, "b: reset background image");
-	drawOutline(window_x, window_y, depthWidth, depthHeight);
+	drawInfo(0, 0, text);
 	gui.draw();
-
-	// draw bezier
-	ofSetColor(255, 255, 255, 255);
-	bezManager.draw();
-
-	window_x = depthWidth + offset_x * 2;
-	window_y = offset_y;
-	drawOutline(window_x, window_y, 768, 432);
 }
 
 //--------------------------------------------------------------
@@ -156,7 +178,10 @@ void ofApp::exit() {
 void ofApp::keyPressed(int key){
 
 	// send key event
-	bezManager.keyPressed(key);
+	if (currentMode == MODE_WARP_SETTING)
+	{
+		bezManager.keyPressed(key);
+	}
 
 	switch (key)
 	{
@@ -175,6 +200,9 @@ void ofApp::keyPressed(int key){
 		break;
 	case 'l':
 		bezManager.loadSettings();
+		break;
+	case ' ':
+		toggle_mode();
 		break;
 
 	default:
@@ -196,18 +224,26 @@ void ofApp::mouseMoved(int x, int y ){
 //--------------------------------------------------------------
 void ofApp::mouseDragged(int x, int y, int button){
 
-	maskGenerator.drag_nearest_corner(ofVec2f(x - WINDOW_OFFSET_X, y - WINDOW_OFFSET_Y));
-	imageProcessing.setMaskImage(maskGenerator.getMaskPixels());
-
 	// send drag event
-	bezManager.mouseDragged(x, y, button);
+	if (currentMode == MODE_WARP_SETTING)
+	{
+		bezManager.mouseDragged(x, y, button);
+	}
+	else {
+		maskGenerator.drag_nearest_corner(ofVec2f(x - WINDOW_OFFSET_X, y - WINDOW_OFFSET_Y));
+		imageProcessing.setMaskImage(maskGenerator.getMaskPixels());
+
+	}
 }
 
 //--------------------------------------------------------------
 void ofApp::mousePressed(int x, int y, int button){
 
 	// send press event
-	bezManager.mousePressed(x, y, button);
+	if (currentMode == MODE_WARP_SETTING)
+	{
+		bezManager.mousePressed(x, y, button);
+	}
 }
 
 //--------------------------------------------------------------
@@ -285,9 +321,107 @@ void ofApp::drawInfo(int x, int y, string m)
 void ofApp::drawOutline(int x, int y, int w, int h)
 {
 	ofPushStyle();
-	ofSetColor(128);
+	//ofSetColor(128);
+	ofSetColor(255,0,0);
 	ofNoFill();
 	ofRect(x, y, w, h);
 	ofSetColor(255);
 	ofPopStyle();
+}
+
+//--------------------------------------------------------------
+void ofApp::toggle_mode()
+{
+	switch (currentMode)
+	{
+	case MODE_DEPTH_SETTING:
+		currentMode = MODE_WARP_SETTING;
+		break;
+	case MODE_WARP_SETTING:
+		currentMode = MODE_IMAGE_PROCESSING;
+		break;
+	case MODE_IMAGE_PROCESSING:
+		currentMode = MODE_DEPTH_SETTING;
+		break;
+	default:
+		break;
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::update_kinect()
+{
+	if (bShowIrImage)
+	{
+		kinectV2.grabNewFrameIR();
+	}
+	else
+	{
+		kinectV2.grabNewFrame();
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::check_bg_mode()
+{
+	if (bgCalcStartTime + bgAddDuration * 1000 > ofGetElapsedTimeMillis())
+	{
+		bSetBg.set(true);
+	}
+	else {
+		bSetBg.set(false);
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::calc_front_image()
+{
+	// calc front image
+	if (kinectV2.newFrameIsAvailable())
+	{
+		imageProcessing.update(kinectV2.getDepthData16());
+
+		check_bg_mode();
+
+		if (bSetBg)
+		{
+			imageProcessing.calcBackground();
+		}
+		else
+		{
+			imageProcessing.calcFrontArea();
+		}
+	}
+}
+
+//--------------------------------------------------------------
+void ofApp::update_warp_fbo()
+{
+	// update fbo
+	warpFbo.begin();
+	ofPushStyle();
+	ofBackground(0);
+	ofSetColor(255);
+	ofFill();
+	//imageProcessing.show_debug_image(0, 0);
+	imageProcessing.show_front_image(0, 0);
+	ofPopStyle();
+	warpFbo.end();
+}
+
+//--------------------------------------------------------------
+void ofApp::update_shadow_fbo()
+{
+	shadowFbo.begin();
+	ofBackground(0);
+	ofPushMatrix();
+	ofTranslate((SHADOW_WIDTH - 1920) / 2, (SHADOW_HEIGHT - 1080) / 2);
+	bezManager.draw();
+	ofPopMatrix();
+
+	// for debug
+	// todo: delete this line
+	//ofDrawCircle(SHADOW_WIDTH / 2, SHADOW_HEIGHT / 2, 100);
+
+	shadowFbo.end();
 }

@@ -32,7 +32,7 @@ bool CImageProcessing::setup(int w, int h)
 	// init gui params
 	params.setName("sensing params");
 	params.add(sensing_range.set("sensing range", 1000, 1, 7000));
-	params.add(touch_range.set("touch range", 100, 1, 1000));
+	//params.add(touch_range.set("touch range", 100, 1, 1000));
 	params.add(cut_off_threshold.set("nearest distance", 4000, 0, 7000));
 	params.add(bg_diff.set("bg offset", 10, 0, 500));
 	//params.add(minAreaRadius.set("min blob radius", 10, 0, 50));
@@ -128,27 +128,21 @@ void CImageProcessing::findActiveObject()
 				fsDistance > cut_off_threshold &&							// 不正な値
 				maskMat->data[index] > 128)										// マスクの範囲外
 			{
-				//dstMat16->data[index2] = depthMat16->data[index2];
-				//dstMat16->data[index2 + 1] = depthMat16->data[index2 + 1];
 				frontMat->data[index] = 255;
-				if (fsDistance > bgDistance - bg_diff - touch_range)
-				{
-					touchMat->data[index] = 255;
-				}
-				else
-				{
-					touchMat->data[index] = 0;
-				}
+				//if (fsDistance > bgDistance - bg_diff - touch_range)
+				//{
+				//	touchMat->data[index] = 255;
+				//}
+				//else
+				//{
+				//	touchMat->data[index] = 0;
+				//}
 			}
 			else
 			{
 				// 黒
-				//dstMat16->data[index2] = 255;
-				//dstMat16->data[index2 + 1] = 32;
-				//dstMat16->data[index2] = 0;
-				//dstMat16->data[index2 + 1] = 0;
 				frontMat->data[index] = 0;
-				touchMat->data[index] = 0;
+				//touchMat->data[index] = 0;
 			}
 
 		}
@@ -162,8 +156,8 @@ void CImageProcessing::findActiveObject()
 	erode(*frontMat, *destMat, erosion_element);
 
 	// ノイズ除去(タッチ領域)
-	erode(*touchMat, *tmpMat, erosion_element);
-	dilate(*tmpMat, *touchMat, erosion_element);
+	//erode(*touchMat, *tmpMat, erosion_element);
+	//dilate(*tmpMat, *touchMat, erosion_element);
 
 	// 領域分割
 	//findObject(destMat, activeObjects, MAX_ACTIVE_BLOBS);
@@ -225,6 +219,48 @@ void CImageProcessing::findTouchObject()
 
 	// 領域分割
 	findObject(destMat, touchObjects, MAX_ACTIVE_BLOBS);
+}
+
+//--------------------------------------------------------------
+void CImageProcessing::calcFrontArea()
+{
+	// 前景領域を取り出す & 二値化
+	for (int j = 0; j < depthHeight; j++)
+	{
+		for (int i = 0; i < depthWidth; i++)
+		{
+			int index = i + j*depthWidth;
+			int index2 = index * 2;
+
+			unsigned short fsDistance = depthMat16->data[index2] + (depthMat16->data[index2 + 1] << 8);
+			unsigned short bgDistance = bgMat16->data[index2] + (bgMat16->data[index2 + 1] << 8);
+
+			if ( abs(fsDistance - bgDistance) < bg_diff )
+			{
+				frontMat->data[index] = 0;
+			}
+			else
+			{
+				frontMat->data[index] = 255;
+			}
+
+			//if (fsDistance < bgDistance - bg_diff &&			// 背景より手前にある
+			//	fsDistance > bgDistance - bg_diff - sensing_range &&	// 認識面より手前にある
+			//	fsDistance > cut_off_threshold &&							// 不正な値
+			//	maskMat->data[index] > 128)										// マスクの範囲外
+			//{
+			//	frontMat->data[index] = 255;
+			//}
+			//else
+			//{
+			//	frontMat->data[index] = 0;
+			//}
+
+		}
+	}
+
+	// ノイズ除去(白縮小)
+	erode(*frontMat, *destMat, erosion_element);
 }
 
 bool CImageProcessing::isTouchArea(int depth_x, int depth_y)

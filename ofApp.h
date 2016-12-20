@@ -3,6 +3,7 @@
 #include "ofMain.h"
 #include "ofxGui.h"
 #include "ofxBezierWarpManager.h"
+#include "ofxSpout2Sender.h"
 
 #include "KinectV2DepthCamera.h"
 #include "ImageProcessing.h"
@@ -10,8 +11,16 @@
 
 constexpr int WINDOW_OFFSET_X = 20;
 constexpr int WINDOW_OFFSET_Y = 20;
-constexpr int SCREEN_WIDTH = 1920;
-constexpr int SCREEN_HEIGHT = 1080;
+constexpr int SHADOW_WIDTH = 16 * 48;
+constexpr int SHADOW_HEIGHT = 9 * 48;
+
+enum APP_MODE
+{
+	MODE_DEPTH_SETTING = 0,
+	MODE_WARP_SETTING,
+	MODE_IMAGE_PROCESSING,
+	MODE_SPOUT,
+};
 
 class ofApp : public ofBaseApp{
 
@@ -60,5 +69,18 @@ private:
 
 	// mapper
 	ofxBezierWarpManager bezManager;
-	ofFbo fbo;
+	ofFbo warpFbo;
+	ofFbo shadowFbo;
+
+	void toggle_mode();
+	APP_MODE currentMode;
+
+	// functions
+	void update_kinect();
+	void check_bg_mode();
+	void calc_front_image();
+	void update_warp_fbo();
+	void update_shadow_fbo();
+
+	ofxSpout2::Sender spout;
 };

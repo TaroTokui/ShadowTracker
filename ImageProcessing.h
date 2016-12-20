@@ -53,6 +53,7 @@ public:
 	void findActiveObject();
 	void findStaticObject();
 	void findTouchObject();
+	void calcFrontArea();
 
 	// kinect‚Ìdepth‰æ‘œ‚ÌÀ•WŒn
 	bool isTouchArea(int depth_x, int depth_y);
